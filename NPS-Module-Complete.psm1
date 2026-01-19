@@ -2178,3 +2178,1721 @@ Write-Host @"
 ╚══════════════════════════════════════════════════════════════════╝
 
 "@ -ForegroundColor Cyan
+
+
+#region ============================================================
+# Additional Functions (Ported from SbPAMAPI)
+# These functions provide extended functionality for NPS operations
+#endregion ==========================================================
+
+function Convert-NPSToken {
+    <#
+    .SYNOPSIS
+        Decodes and parses a JWT token from NPS.
+
+    .DESCRIPTION
+        Converts a JWT (JSON Web Token) string into a PowerShell object
+        by decoding the Base64Url-encoded payload section.
+
+        This is useful for extracting claims from the token such as:
+        - ManagedAccountId
+        - User information
+        - Token expiration
+        - Permissions and roles
+
+    .PARAMETER Token
+        The JWT token string to decode. Must be a valid 3-part JWT
+        (header.payload.signature).
+
+    .OUTPUTS
+        PSCustomObject
+        The decoded JWT payload as a PowerShell object with properties
+        matching the token claims.
+
+    .EXAMPLE
+        $tokenObj = Convert-NPSToken -Token $myToken
+        $tokenObj.ManagedAccountId
+
+        Decodes token and extracts the ManagedAccountId claim.
+
+    .EXAMPLE
+        $token | Convert-NPSToken | Select-Object exp, iat, ManagedAccountId
+
+        Pipeline usage to extract specific claims.
+
+    .NOTES
+        This function only decodes the payload; it does not validate
+        the token signature. Use for inspection purposes only.
+
+    .LINK
+        Get-NPSToken
+        Get-NPSUserToken
+    #>
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param (
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true,
+            HelpMessage = "JWT token string to decode")]
+        [ValidateNotNullOrEmpty()]
+        [System.String] $Token
+    )
+
+    process {
+        $parts = $token.Split('.')
+        if ($parts.length -ne 3) {
+            Write-Error "Malformed token: Expected 3 parts, got $($parts.length)"
+            return
+        }
+
+        # Base64Url decode the payload
+        $payload = $parts[1].Replace('-', '+').Replace('_', '/')
+        $mod = $parts[1].Length % 4
+
+        switch ($mod) {
+            1 { $payload = $payload.Substring(0, $payload.Length - 1) }
+            2 { $payload = $payload + "==" }
+            3 { $payload = $payload + "=" }
+        }
+
+        $json = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payload))
+        return ConvertFrom-Json $json
+    }
+}
+
+function Get-NPSActivitySessionConfiguration {
+    <#
+    .SYNOPSIS
+        Gets activity session configuration.
+
+    .DESCRIPTION
+        Retrieves configuration settings for activity sessions,
+        optionally for a specific session ID.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Id
+        Optional session GUID for specific configuration.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        PSCustomObject
+        Session configuration object.
+
+    .EXAMPLE
+        Get-NPSActivitySessionConfiguration -Token $token
+
+        Gets default session configuration.
+
+    .LINK
+        Get-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [System.Guid] $Id,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $restEndpoint = "$($Uri)/api/v1/ActivitySession/Config"
+    if (![string]::IsNullOrEmpty($Id)) {
+        $restEndpoint += "/$Id"
+    }
+
+    $Params = @{
+        Token = $Token
+        Uri   = $restEndpoint
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSActivitySessionCount {
+    <#
+    .SYNOPSIS
+        Gets the count of activity sessions.
+
+    .DESCRIPTION
+        Returns the number of activity sessions, optionally filtered by status.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Status
+        Optional status filter.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.Int32
+        Count of sessions.
+
+    .EXAMPLE
+        Get-NPSActivitySessionCount -Token $token -Status "Active"
+
+        Gets count of active sessions.
+
+    .LINK
+        Get-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    [OutputType([int])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [System.String] $Status,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $restEndpoint = "$($Uri)/api/v1/ActivitySession/Count"
+    if (![string]::IsNullOrEmpty($Status)) {
+        $restEndpoint += "?status=$($Status)"
+    }
+
+    $Params = @{
+        Token = $Token
+        Uri   = $restEndpoint
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSActivitySessionPassword {
+    <#
+    .SYNOPSIS
+        Retrieves the password for an activity session.
+
+    .DESCRIPTION
+        Gets the credential password associated with an active
+        activity session. The session must be in an active state.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Id
+        Activity session GUID.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String
+        The session password.
+
+    .EXAMPLE
+        $password = Get-NPSActivitySessionPassword -Token $token -Id $sessionId
+
+        Retrieves password for the specified session.
+
+    .NOTES
+        Requires an active session. Password is returned in plain text.
+        Handle securely and avoid logging.
+
+    .LINK
+        Get-NPSActivitySession
+        Start-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $true)]
+        [System.Guid] $Id,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $Params = @{
+        Token = $Token
+        Uri   = "$($Uri)/api/v1/ActivitySession/$($Id)/Password"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSActivitySessionResource {
+    <#
+    .SYNOPSIS
+        Gets resources available for activity sessions.
+    .DESCRIPTION
+        Retrieves managed resources that can be used for activity sessions.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER FilterText
+        Text filter for searching resources.
+    .PARAMETER DNSHostName
+        Filter by DNS hostname.
+    .PARAMETER Uri
+        NPS server URL.
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+    .EXAMPLE
+        Get-NPSActivitySessionResource -Token $token -FilterText "Windows"
+    .LINK
+        Start-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter()][string] $FilterText,
+        [Parameter()][string] $DNSHostName,
+        [Parameter()][Guid] $CredentialId,
+        [Parameter()][Guid] $ResourceId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $resources = @(); $skip = 0; $take = 100
+    $Params = @{ Token = $Token; Body = @{ FilterText = $FilterText } }
+    do {
+        $Params.Uri = "$($Uri.TrimEnd("/"))/api/v1/ActivitySession/Resources?skip=$skip&take=$take"
+        $result = Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck -Method Post
+        $result.Data | ForEach-Object { $resources += $_ }
+        $skip += $take
+    } until ($resources.Count -ge $result.RecordsTotal)
+    if (![string]::IsNullOrEmpty($DNSHostName)) { $resources = $resources | Where-Object { $_.DnsHostName -eq $DNSHostName } }
+    if ($null -ne $CredentialId) { $resources = $resources | Where-Object { $_.CredentialId -eq $CredentialId } }
+    if ($null -ne $ResourceId) { $resources = $resources | Where-Object { $_.Id -eq $ResourceId } }
+    return $resources
+}
+
+function Get-NPSActivitySessionSummary {
+    <#
+    .SYNOPSIS
+        Gets activity session summary information.
+
+    .DESCRIPTION
+        Retrieves summary information for activity sessions, either
+        by status for the current user or by specific session ID.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Status
+        Filter by status: Active, Pending, ApprovalRequired, Historical.
+
+    .PARAMETER Id
+        Specific session GUID for summary.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        PSCustomObject or PSCustomObject[]
+        Session summary object(s).
+
+    .EXAMPLE
+        Get-NPSActivitySessionSummary -Token $token -Status "Active"
+
+        Gets summary of active sessions for current user.
+
+    .LINK
+        Get-NPSActivitySession
+        Get-NPSActivitySessionCount
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "ByStatus")]
+        [ValidateSet("Active", "Pending", "ApprovalRequired", "Historical")]
+        [System.String] $Status,
+
+        [Parameter(Mandatory = $true, ParameterSetName = "ById")]
+        [Guid] $Id,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $restEndpoint = "$($Uri)/api/v1/ActivitySession/MySummaryByStatus/$Status"
+    if ($null -ne $Id) {
+        $restEndpoint = "$($Uri)/api/v1/ActivitySession/SummaryById/$Id"
+    }
+
+    $Params = @{
+        Token = $Token
+        Uri   = $restEndpoint
+    }
+    $result = Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+
+    if ($null -ne $Id) {
+        return $result
+    }
+    $sessions = @()
+    $result.Data | ForEach-Object { $sessions += $_ }
+    return $sessions
+}
+
+function Get-NPSAppUserToken {
+    <#
+    .SYNOPSIS
+        Obtains an application user token using certificate authentication.
+
+    .DESCRIPTION
+        Authenticates using a client certificate and credentials to obtain
+        an application user token. This method is typically used for
+        service accounts and automated processes.
+
+    .PARAMETER Certificate
+        X509 certificate for authentication.
+
+    .PARAMETER Credentials
+        PSCredential with username and password.
+
+    .PARAMETER Uri
+        NPS server URL. Default: "https://localhost:6500"
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String
+        JWT access token.
+
+    .EXAMPLE
+        $cert = Get-NPSCertificate -CertThumbPrint "ABC123..."
+        $cred = Get-Credential
+        $token = Get-NPSAppUserToken -Certificate $cert -Credentials $cred -Uri "https://sbpam.company.com"
+
+        Certificate-based authentication.
+
+    .LINK
+        Get-NPSUserToken
+        Get-NPSCertificate
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [X509Certificate] $Certificate,
+
+        [Parameter(Mandatory = $true)]
+        [PSCredential] $Credentials,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    if (!($Uri -Match "api/v1/AppUserToken")) {
+        $Uri = $Uri + "/WebAppApi/api/v1/AppUserToken"
+    }
+
+    Write-Verbose "Requesting Application User Token from Uri: $Uri using cert: $($Certificate.SerialNumber)"
+
+    try {
+        $userCreds = New-Object System.Net.NetworkCredential($Credentials.UserName, $Credentials.Password)
+
+        $loginBody = @{
+            login                   = $userCreds.UserName
+            password                = $userCreds.Password
+            certificateSerialNumber = $Certificate.SerialNumber
+        }
+        $body = ConvertTo-Json $loginBody
+
+        $Params = @{
+            Certificate = $Certificate
+            Body        = $body
+            Method      = "Post"
+            Uri         = $Uri
+        }
+        return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+    }
+    catch {
+        Write-Error "Get-NPSAppUserToken Error: $($_) $($_.Exception.InnerException)"
+        return $null
+    }
+}
+
+function Get-NPSAuthenticationMethodTypes {
+    <#
+    .SYNOPSIS
+        Gets available authentication method types.
+
+    .DESCRIPTION
+        Retrieves the list of supported authentication methods:
+        Password, SshCertificate, SshCertificateAndPassword.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String[]
+        Array of authentication method names.
+
+    .EXAMPLE
+        Get-NPSAuthenticationMethodTypes -Token $token
+
+    .LINK
+        Get-NPSCredentialTypes
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $Params = @{
+        Token = $Token
+        Uri   = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetAuthenticationMethodTypes"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSCertificate {
+    <#
+    .SYNOPSIS
+        Retrieves a certificate from the Windows certificate store.
+
+    .DESCRIPTION
+        Searches the Windows certificate store for a certificate matching
+        the specified criteria. Used for certificate-based authentication
+        with the NPS API.
+
+    .PARAMETER CertSerialNumber
+        Find certificate by serial number.
+
+    .PARAMETER CertThumbPrint
+        Find certificate by thumbprint (SHA1 hash).
+
+    .PARAMETER CertFriendlyName
+        Find certificate by friendly name.
+
+    .PARAMETER CertSubject
+        Find certificate by subject name (supports regex).
+
+    .PARAMETER CertStorePath
+        Certificate store path. Default: "Cert:\CurrentUser\My"
+
+    .OUTPUTS
+        System.Security.Cryptography.X509Certificates.X509Certificate2
+        The matching certificate.
+
+    .EXAMPLE
+        Get-NPSCertificate -CertThumbPrint "ABC123DEF456..."
+
+        Finds certificate by thumbprint.
+
+    .EXAMPLE
+        $cert = Get-NPSCertificate -CertSubject "CN=NPSApp"
+        Get-NPSAppUserToken -Certificate $cert -Credentials $cred
+
+        Gets certificate and uses it for app authentication.
+
+    .LINK
+        Get-NPSNixCertificate
+        Get-NPSAppUserToken
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(ParameterSetName = "SerialNumber", Mandatory)]
+        [string] $CertSerialNumber,
+
+        [Parameter(ParameterSetName = "Thumbprint", Mandatory)]
+        [string] $CertThumbPrint,
+
+        [Parameter(ParameterSetName = "FriendlyName", Mandatory)]
+        [string] $CertFriendlyName,
+
+        [Parameter(ParameterSetName = "Subject", Mandatory)]
+        [string] $CertSubject,
+
+        [Parameter(Mandatory = $false)]
+        [string] $CertStorePath = "Cert:\CurrentUser\My"
+    )
+
+    if (![string]::IsNullOrEmpty($CertSerialNumber)) {
+        $CertSerialNumber = $CertSerialNumber.Replace(" ", "").Trim()
+        $certificate = Get-ChildItem -Path $CertStorePath | Where-Object { $_.SerialNumber -match $CertSerialNumber }
+        Write-Verbose "Using Certificate Serial Number: $($certificate.SerialNumber)"
+    }
+    elseif (![string]::IsNullOrEmpty($CertThumbPrint)) {
+        $certificate = Get-ChildItem -Path $CertStorePath | Where-Object { $_.ThumbPrint -match $CertThumbPrint }
+        Write-Verbose "Using Certificate ThumbPrint: $($certificate.Thumbprint)"
+    }
+    elseif (![string]::IsNullOrEmpty($CertFriendlyName)) {
+        $certificate = Get-ChildItem -Path $CertStorePath | Where-Object { $_.FriendlyName -match $CertFriendlyName }
+        Write-Verbose "Using Certificate Friendly Name: $($certificate.FriendlyName)"
+    }
+    elseif (![string]::IsNullOrEmpty($CertSubject)) {
+        $certificate = Get-ChildItem -Path $CertStorePath | Where-Object { $_.Subject -match $CertSubject }
+        Write-Verbose "Using Certificate Subject: $($certificate.Subject)"
+    }
+    else {
+        $certificate = $null
+    }
+
+    if ($null -eq $certificate) {
+        Write-Error "No Certificate found"
+        throw "No Certificate found"
+    }
+
+    return $certificate
+}
+
+function Get-NPSCiscoEnablePassword {
+    <#
+    .SYNOPSIS
+        Gets the Cisco enable password for a session.
+    .DESCRIPTION
+        Retrieves the enable mode password for Cisco device access.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER SessionId
+        Activity session GUID.
+    .EXAMPLE
+        $enablePwd = Get-NPSCiscoEnablePassword -Token $token -SessionId $sessionId
+    .LINK
+        Start-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $true)][Guid] $SessionId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/ActivitySession/$SessionId/CiscoEnablePassword" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSCiscoEnablePasswordByCredential {
+    <#
+    .SYNOPSIS
+        Gets Cisco enable password by credential ID.
+    .DESCRIPTION
+        Retrieves the enable password associated with a credential.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER CredentialId
+        Credential GUID.
+    .EXAMPLE
+        Get-NPSCiscoEnablePasswordByCredential -Token $token -CredentialId $credId
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $true)][Guid] $CredentialId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/$CredentialId/CiscoEnablePassword" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSCredentialSshCertificate {
+    <#
+    .SYNOPSIS
+        Gets an SSH certificate by credential ID.
+    .PARAMETER CredentialId
+        Credential GUID.
+    .PARAMETER Token
+        JWT authentication token.
+    .EXAMPLE
+        Get-NPSCredentialSshCertificate -CredentialId $credId -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][Guid] $CredentialId,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetCredentialSshCertificate/$CredentialId" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSCredentialTypes {
+    <#
+    .SYNOPSIS
+        Gets available credential types.
+
+    .DESCRIPTION
+        Retrieves the list of supported credential types in NPS:
+        Any, Configuration, User, Service, ActivityToken, Application,
+        VaultUser, SshKeyCert.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String[]
+        Array of credential type names.
+
+    .EXAMPLE
+        Get-NPSCredentialTypes -Token $token
+
+    .LINK
+        Get-NPSCredential
+        Get-NPSAuthenticationMethodTypes
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $Params = @{
+        Token = $Token
+        Uri   = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetCredentialTypes"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSDomain {
+    <#
+    .SYNOPSIS
+        Gets Active Directory domain information.
+    .DESCRIPTION
+        Retrieves domain configuration by domain ID or configuration ID.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER Id
+        Domain GUID.
+    .PARAMETER DomainConfigurationId
+        Domain configuration GUID.
+    .EXAMPLE
+        Get-NPSDomain -Token $token -Id $domainId
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $true, ParameterSetName = "ById")][Guid] $Id,
+        [Parameter(Mandatory = $true, ParameterSetName = "ByDomainConfigurationId")][Guid] $DomainConfigurationId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    if ($null -ne $DomainConfigurationId) {
+        $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/ActiveDirectory/Domain/ByDomainConfiguration/$DomainConfigurationId" }
+    } else {
+        $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/ActiveDirectory/Domain/$Id" }
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSManagedResourceSshFingerprint {
+    <#
+    .SYNOPSIS
+        Gets the SSH fingerprint for a managed resource.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER ResourceId
+        Managed resource GUID.
+    .EXAMPLE
+        Get-NPSManagedResourceSshFingerprint -Token $token -ResourceId $resourceId
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $true)][System.Guid] $ResourceId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/ManagedResource/GetSshFingerprint/$ResourceId" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSMfaToken {
+    <#
+    .SYNOPSIS
+        Completes MFA verification to obtain a full access token.
+
+    .DESCRIPTION
+        Second step of authentication - exchanges a pre-MFA token and
+        TOTP code for a full access token with complete permissions.
+
+    .PARAMETER Token
+        Pre-MFA token from Get-NPSToken.
+
+    .PARAMETER Code
+        6-digit TOTP code from Get-NPSTotp or authenticator app.
+
+    .PARAMETER WebSession
+        Web session for maintaining state.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String
+        Full access JWT token.
+
+    .EXAMPLE
+        $code = Get-NPSTotp -Secret $mfaSecret
+        $fullToken = Get-NPSMfaToken -Token $preToken -Code $code -WebSession $session -Uri "https://sbpam"
+
+    .LINK
+        Get-NPSToken
+        Get-NPSTotp
+        Get-NPSUserToken
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern("^\d{6}$")]
+        [System.String] $Code,
+
+        [Parameter(Mandatory = $true)]
+        [Microsoft.PowerShell.Commands.WebRequestSession] $WebSession,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $Params = @{
+        Token      = $Token
+        Body       = $Code
+        Method     = "Post"
+        WebSession = $WebSession
+        Uri        = "$($Uri.TrimEnd("/"))/signin2fa"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSNixCertificate {
+    <#
+    .SYNOPSIS
+        Retrieves a certificate from the certificate store on Linux/macOS.
+
+    .DESCRIPTION
+        Searches the X509 certificate store for a certificate matching
+        the specified criteria. Used for certificate-based authentication
+        on non-Windows platforms.
+
+    .PARAMETER CertSerialNumber
+        Find certificate by serial number.
+
+    .PARAMETER CertThumbPrint
+        Find certificate by thumbprint (SHA1 hash).
+
+    .PARAMETER CertFriendlyName
+        Find certificate by friendly name.
+
+    .PARAMETER CertSubject
+        Find certificate by subject name (supports regex).
+
+    .PARAMETER CertStore
+        Certificate store name. Default: "My"
+
+    .OUTPUTS
+        System.Security.Cryptography.X509Certificates.X509Certificate2
+        The matching certificate, or $null if not found.
+
+    .EXAMPLE
+        Get-NPSNixCertificate -CertThumbPrint "ABC123..."
+
+        Finds certificate by thumbprint.
+
+    .EXAMPLE
+        Get-NPSNixCertificate -CertSubject "CN=NPS*" -CertStore "My"
+
+        Finds certificate by subject pattern.
+
+    .LINK
+        Get-NPSCertificate
+        Get-NPSAppUserToken
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(ParameterSetName = "SerialNumber", Mandatory)]
+        [string] $CertSerialNumber,
+
+        [Parameter(ParameterSetName = "Thumbprint", Mandatory)]
+        [string] $CertThumbPrint,
+
+        [Parameter(ParameterSetName = "Friendlyname", Mandatory)]
+        [string] $CertFriendlyName,
+
+        [Parameter(ParameterSetName = "Subject", Mandatory)]
+        [string] $CertSubject,
+
+        [Parameter(Mandatory = $false)]
+        [string] $CertStore = "My"
+    )
+
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($CertStore)
+    $store.Open("ReadOnly")
+    $certificate = $null
+
+    Write-Verbose "Using certificate store: $CertStore"
+
+    if (![string]::IsNullOrEmpty($CertSerialNumber)) {
+        $CertSerialNumber = $CertSerialNumber.Replace(" ", "").Trim()
+        foreach ($certificate in $store.Certificates) {
+            if ($certificate.SerialNumber -match $CertSerialNumber) {
+                Write-Verbose "Using Certificate Serial Number: $($certificate.SerialNumber)"
+                break
+            }
+        }
+    }
+    elseif (![string]::IsNullOrEmpty($CertThumbPrint)) {
+        foreach ($certificate in $store.Certificates) {
+            if ($certificate.ThumbPrint -match $CertThumbPrint) {
+                Write-Verbose "Using Certificate Thumbprint: $($certificate.ThumbPrint)"
+                break
+            }
+        }
+    }
+    elseif (![string]::IsNullOrEmpty($CertFriendlyName)) {
+        foreach ($certificate in $store.Certificates) {
+            if ($certificate.FriendlyName -match $CertFriendlyName) {
+                Write-Verbose "Using Certificate FriendlyName: $($certificate.FriendlyName)"
+                break
+            }
+        }
+    }
+    elseif (![string]::IsNullOrEmpty($CertSubject)) {
+        foreach ($certificate in $store.Certificates) {
+            if ($certificate.Subject -match $CertSubject) {
+                Write-Verbose "Using Certificate Subject: $($certificate.Subject)"
+                break
+            }
+        }
+    }
+    else {
+        $certificate = $null
+    }
+    return $certificate
+}
+
+function Get-NPSSSHKeyGenAlgorithm {
+    <#
+    .SYNOPSIS
+        Gets available SSH key generation algorithms.
+    .DESCRIPTION
+        Retrieves supported SSH key algorithms (RSA, ECDSA, Ed25519).
+    .PARAMETER Token
+        JWT authentication token.
+    .EXAMPLE
+        Get-NPSSSHKeyGenAlgorithm -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/SSHKeyGenAlgorithms" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSSettings {
+    <#
+    .SYNOPSIS
+        Gets NPS system settings.
+    .DESCRIPTION
+        Retrieves system configuration settings.
+    .PARAMETER Token
+        JWT authentication token.
+    .EXAMPLE
+        Get-NPSSettings -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Settings" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSSshCertificateByDomainUser {
+    <#
+    .SYNOPSIS
+        Gets SSH certificate by domain and username.
+    .PARAMETER DomainName
+        Domain name.
+    .PARAMETER UserName
+        Username.
+    .EXAMPLE
+        Get-NPSSshCertificateByDomainUser -DomainName "CORP" -UserName "jsmith" -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $DomainName,
+        [Parameter(Mandatory = $true)][string] $UserName,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetSshCertificateByDomainUser/$DomainName/$UserName" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSSshCertificateByUser {
+    <#
+    .SYNOPSIS
+        Gets SSH certificate by username.
+    .PARAMETER UserName
+        Username.
+    .EXAMPLE
+        Get-NPSSshCertificateByUser -UserName "jsmith" -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $UserName,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetSshCertificateByUser/$UserName" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSToken {
+    <#
+    .SYNOPSIS
+        Obtains a pre-MFA token using username and password.
+
+    .DESCRIPTION
+        First step of authentication - exchanges credentials for a
+        pre-MFA token that must be completed with Get-NPSMfaToken.
+
+        This is typically called internally by Get-NPSUserToken.
+
+    .PARAMETER Credentials
+        NetworkCredential object with username and password.
+
+    .PARAMETER WebSession
+        Web session for maintaining state.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String
+        Pre-MFA JWT token.
+
+    .EXAMPLE
+        $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        $creds = (Get-Credential).GetNetworkCredential()
+        $preToken = Get-NPSToken -Credentials $creds -WebSession $webSession -Uri "https://sbpam"
+
+    .LINK
+        Get-NPSMfaToken
+        Get-NPSUserToken
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Net.NetworkCredential] $Credentials,
+
+        [Parameter(Mandatory = $true)]
+        [Microsoft.PowerShell.Commands.WebRequestSession] $WebSession,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $username = $Credentials.UserName
+    $domain = $Credentials.Domain
+    $tt = $username
+    if (![string]::IsNullOrEmpty($domain)) {
+        $tt = $domain + "\" + $username
+    }
+    $body = @{ login = $tt; password = $Credentials.Password }
+
+    $Params = @{
+        Body        = $body
+        Method      = "Post"
+        ContentType = "application/x-www-form-urlencoded"
+        WebSession  = $WebSession
+        Uri         = "$($Uri.TrimEnd("/"))/signin"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSTotp {
+    <#
+    .SYNOPSIS
+        Generates a Time-based One-Time Password (TOTP) for MFA authentication.
+
+    .DESCRIPTION
+        Calculates a 6-digit TOTP code from a Base32-encoded secret key.
+        This is used for completing MFA authentication when obtaining
+        a full access token from the NPS server.
+
+        The TOTP algorithm follows RFC 6238 using HMAC-SHA1 with a
+        configurable time window (default 30 seconds).
+
+    .PARAMETER Secret
+        The Base32-encoded secret key from your authenticator app setup.
+        This is the secret provided when configuring MFA for your account.
+
+    .PARAMETER TimeWindow
+        The time step in seconds for TOTP calculation.
+        Default: 30 seconds (standard TOTP interval)
+
+    .OUTPUTS
+        System.String
+        A 6-digit TOTP code padded with leading zeros if necessary.
+
+    .EXAMPLE
+        Get-NPSTotp -Secret "JBSWY3DPEHPK3PXP"
+
+        Generates a TOTP code using the provided secret.
+
+    .EXAMPLE
+        $code = Get-NPSTotp -Secret $env:SBPAM_MFA_SECRET
+        Get-NPSMfaToken -Token $preToken -Code $code
+
+        Uses environment variable for secret and passes to MFA token request.
+
+    .NOTES
+        The secret should be stored securely and not hardcoded in scripts.
+        Consider using environment variables or secure vaults.
+
+    .LINK
+        Get-NPSUserToken
+        Get-NPSMfaToken
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true, Position = 0,
+            HelpMessage = "Base32-encoded secret key from authenticator setup")]
+        [ValidateNotNullOrEmpty()]
+        [System.String] $Secret,
+
+        [Parameter(Mandatory = $false,
+            HelpMessage = "Time step in seconds (default 30)")]
+        [ValidateRange(1, 120)]
+        [System.Int64] $TimeWindow = 30
+    )
+
+    # Base32 character set for decoding
+    $Script:Base32Charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+
+    # Convert the secret from Base32 to byte array
+    $bigInteger = [Numerics.BigInteger]::Zero
+    foreach ($char in ($secret.ToUpper() -replace '[^A-Z2-7]').GetEnumerator()) {
+        $bigInteger = ($bigInteger -shl 5) -bor ($Script:Base32Charset.IndexOf($char))
+    }
+    [byte[]]$secretAsBytes = $bigInteger.ToByteArray()
+
+    # Handle big endian 2's complement
+    if ($secretAsBytes[-1] -eq 0) {
+        $secretAsBytes = $secretAsBytes[0..($secretAsBytes.Count - 2)]
+    }
+
+    # Convert little endian to big endian
+    [array]::Reverse($secretAsBytes)
+
+    # Calculate time counter
+    $epochTime = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $timeBytes = [BitConverter]::GetBytes([int64][math]::Floor($epochTime / $TimeWindow))
+    if ([BitConverter]::IsLittleEndian) {
+        [array]::Reverse($timeBytes)
+    }
+
+    # Calculate HMAC-SHA1
+    $hmacGen = [Security.Cryptography.HMACSHA1]::new($secretAsBytes)
+    $hash = $hmacGen.ComputeHash($timeBytes)
+
+    # Dynamic truncation
+    $offset = $hash[$hash.Length - 1] -band 0xF
+    $fourBytes = $hash[$offset..($offset + 3)]
+    if ([BitConverter]::IsLittleEndian) {
+        [array]::Reverse($fourBytes)
+    }
+
+    # Generate 6-digit code
+    $num = [BitConverter]::ToInt32($fourBytes, 0) -band 0x7FFFFFFF
+    return ($num % 1000000).ToString().PadLeft(6, '0')
+}
+
+function Get-NPSUserPolicy {
+    <#
+    .SYNOPSIS
+        Retrieves access control policies for the current user.
+
+    .DESCRIPTION
+        Gets the access control policies associated with the managed account
+        ID embedded in the authentication token.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        PSCustomObject[]
+        Array of access control policy objects.
+
+    .EXAMPLE
+        $policies = Get-NPSUserPolicy -Token $token -Uri "https://sbpam"
+        $policies | Select-Object name, priority
+
+    .LINK
+        Get-NPSAccessControlPolicy
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $JwtObj = Convert-NPSToken -Token $Token
+    $Params = @{
+        Token = $Token
+        Uri   = "$($Uri)/api/v1/AccessControlPolicy/ManagedAccount/$($JwtObj.ManagedAccountId)"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Get-NPSUserSshCertificate {
+    <#
+    .SYNOPSIS
+        Gets SSH certificates for a user by user ID.
+    .PARAMETER UserId
+        User GUID.
+    .PARAMETER Token
+        JWT authentication token.
+    .EXAMPLE
+        Get-NPSUserSshCertificate -UserId $userId -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][Guid] $UserId,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/GetUserSshCertificate/$UserId" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Get-NPSUserToken {
+    <#
+    .SYNOPSIS
+        Obtains a full access token using username/password and MFA.
+
+    .DESCRIPTION
+        Performs the complete two-step authentication flow:
+        1. Authenticates with username/password to get a pre-MFA token
+        2. Generates TOTP code from the user's MFA secret
+        3. Completes MFA verification to get a full access token
+
+        This is the primary authentication method for interactive scripts.
+
+    .PARAMETER Credentials
+        PSCredential object containing username and password.
+        Use Get-Credential to create interactively.
+
+    .PARAMETER UserSecret
+        Base32-encoded MFA secret for TOTP generation.
+        This is the secret from your authenticator app setup.
+
+    .PARAMETER Uri
+        NPS server URL. Default: "https://localhost:6500"
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        System.String
+        JWT access token for API authentication.
+
+    .EXAMPLE
+        $cred = Get-Credential
+        $token = Get-NPSUserToken -Credentials $cred -UserSecret "JBSWY3DPEHPK3PXP" -Uri "https://sbpam.company.com"
+
+        Interactive credential prompt with MFA.
+
+    .EXAMPLE
+        $secPwd = ConvertTo-SecureString "P@ssw0rd" -AsPlainText -Force
+        $cred = New-Object PSCredential("admin", $secPwd)
+        $token = Get-NPSUserToken -Credentials $cred -UserSecret $env:MFA_SECRET -Uri $env:SBPAM_URL
+
+        Automated authentication using environment variables.
+
+    .NOTES
+        Tokens expire after approximately 15 minutes.
+        Store the MFA secret securely - never hardcode in scripts.
+
+    .LINK
+        Get-NPSAppUserToken
+        Get-NPSToken
+        Get-NPSMfaToken
+    #>
+    [CmdletBinding()]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true,
+            HelpMessage = "PSCredential with username and password")]
+        [PSCredential] $Credentials,
+
+        [Parameter(Mandatory = $true,
+            HelpMessage = "Base32 MFA secret for TOTP")]
+        [string] $UserSecret,
+
+        [Parameter(Mandatory = $false,
+            HelpMessage = "NPS server URL")]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    # Create web session
+    $WebSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $userCreds = $Credentials.GetNetworkCredential()
+
+    # Get pre-MFA token
+    $Params = @{
+        Credentials = $userCreds
+        WebSession  = $WebSession
+        Uri         = $Uri
+    }
+    $token = Get-NPSToken @Params -SkipCertificateCheck:$SkipCertificateCheck -ErrorAction Stop
+
+    # Generate TOTP code
+    $userCode = Get-NPSTotp -Secret $UserSecret
+
+    # Complete MFA
+    $Params = @{
+        Token      = $token
+        Code       = $userCode
+        WebSession = $WebSession
+        Uri        = $Uri
+    }
+    return Get-NPSMfaToken @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function New-NPSUserSshCertificate {
+    <#
+    .SYNOPSIS
+        Generates a new SSH certificate for a user.
+    .DESCRIPTION
+        Creates a new SSH certificate credential with specified algorithm.
+    .PARAMETER UserId
+        User GUID to generate certificate for.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER KeyGenAlgorithm
+        Algorithm: RSA, ECDSA, Ed25519. Default: RSA
+    .PARAMETER KeyLength
+        Key length in bits (for RSA).
+    .PARAMETER AutoGenPassphrase
+        Auto-generate passphrase. Default: true
+    .EXAMPLE
+        New-NPSUserSshCertificate -UserId $userId -Token $token -KeyGenAlgorithm "RSA" -KeyLength 4096
+    .EXAMPLE
+        New-NPSUserSshCertificate -UserId $userId -Token $token -KeyGenAlgorithm "Ed25519"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][Guid] $UserId,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][bool] $AutoGenPassphrase = $true,
+        [Parameter(Mandatory = $false)][string] $Passphrase,
+        [Parameter(Mandatory = $false)][ValidateSet("RSA", "ECDSA", "Ed25519")][string] $KeyGenAlgorithm = "RSA",
+        [Parameter(Mandatory = $false)][int] $KeyLength,
+        [Parameter(Mandatory = $false)][ValidateSet("Any", "Configuration", "User", "Service", "ActivityToken", "Application", "VaultUser", "SshKeyCert")][string] $CredentialType = "SshKeyCert",
+        [Parameter(Mandatory = $false)][ValidateSet("Password", "SshCertificate", "SshCertificateAndPassword")][string] $AuthenticationMethod,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $sshBody = @{ autoGenPassphrase = $AutoGenPassphrase; passphrase = $Passphrase; keyGenAlgorithm = $KeyGenAlgorithm; keyLength = $KeyLength; credentialType = $CredentialType; authenticationMethod = $AuthenticationMethod }
+    $body = ConvertTo-Json $sshBody
+    $Params = @{ Token = $Token; Body = $body; Method = "Post"; Uri = "$($Uri.TrimEnd("/"))/api/v1/Credential/GenerateUserSshCertificate/$UserId" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Search-NPSActiveSession {
+    <#
+    .SYNOPSIS
+        Searches active sessions for specific content.
+    .DESCRIPTION
+        Searches currently active sessions for matching content.
+    .PARAMETER SearchFilter
+        Text to search for in session content.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER Key
+        Content type: All, Windows_Audit, StdIn, StdOut. Default: All
+    .EXAMPLE
+        Search-NPSActiveSession -SearchFilter "password" -Token $token
+    .EXAMPLE
+        Search-NPSActiveSession -SearchFilter "sudo" -Key "StdIn" -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $SearchFilter,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][ValidateSet("All", "Windows_Audit", "StdIn", "StdOut")][string] $Key = "All",
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $body = @{ searchFilter = $SearchFilter; key = $Key } | ConvertTo-Json
+    $Params = @{ Token = $Token; Body = $body; Method = "Post"; Uri = "$($Uri.TrimEnd("/"))/api/v1/ReplaySession/SearchActiveSessions" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Search-NPSHistoricalSession {
+    <#
+    .SYNOPSIS
+        Searches historical sessions for specific content.
+    .DESCRIPTION
+        Searches completed session recordings for matching content.
+    .PARAMETER SearchFilter
+        Text to search for.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER Key
+        Content type: All, Windows_Audit, StdIn, StdOut. Default: All
+    .EXAMPLE
+        Search-NPSHistoricalSession -SearchFilter "rm -rf" -Token $token
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $SearchFilter,
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $false)][ValidateSet("All", "Windows_Audit", "StdIn", "StdOut")][string] $Key = "All",
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $body = @{ searchFilter = $SearchFilter; key = $Key } | ConvertTo-Json
+    $Params = @{ Token = $Token; Body = $body; Method = "Post"; Uri = "$($Uri.TrimEnd("/"))/api/v1/ReplaySession/SearchHistoricalSessions" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Set-NPSManagedResourceTrustThumbprint {
+    <#
+    .SYNOPSIS
+        Sets the trusted SSH thumbprint for a managed resource.
+    .PARAMETER Token
+        JWT authentication token.
+    .PARAMETER ResourceId
+        Managed resource GUID.
+    .EXAMPLE
+        Set-NPSManagedResourceTrustThumbprint -Token $token -ResourceId $resourceId
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $Token,
+        [Parameter(Mandatory = $true)][System.Guid] $ResourceId,
+        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
+        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
+    )
+    $Params = @{ Method = "Put"; Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/ManagedResource/$ResourceId/Trust" }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+}
+
+function Start-NPSActivitySession {
+    <#
+    .SYNOPSIS
+        Starts a new activity session for privileged access.
+
+    .DESCRIPTION
+        Creates and starts a new activity session for accessing a
+        managed resource. Supports various identification methods
+        including resource ID/name and credential ID/name.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER ActivityName
+        Name of the activity type (e.g., "RDP", "SSH", "CredentialRelease").
+
+    .PARAMETER AccessPolicyId
+        Optional access policy GUID to use.
+
+    .PARAMETER ResourceId
+        Managed resource GUID.
+
+    .PARAMETER ResourceName
+        Managed resource name (alternative to ResourceId).
+
+    .PARAMETER CredentialId
+        Credential GUID to use.
+
+    .PARAMETER CredentialName
+        Credential name (alternative to CredentialId).
+
+    .PARAMETER CredentialAccount
+        Credential account username (requires CredentialResource).
+
+    .PARAMETER CredentialResource
+        Credential resource/domain (requires CredentialAccount).
+
+    .PARAMETER StartTime
+        Scheduled start time (default: now).
+
+    .PARAMETER EndTime
+        Scheduled end time.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        PSCustomObject
+        The created activity session object.
+
+    .EXAMPLE
+        Start-NPSActivitySession -Token $token -ActivityName "RDP" -ResourceName "Server01" -CredentialName "Admin-Server01"
+
+        Starts an RDP session to Server01.
+
+    .EXAMPLE
+        $session = Start-NPSActivitySession -Token $token -ActivityName "SSH" -ResourceId $serverId -CredentialId $credId
+        $password = Get-NPSActivitySessionPassword -Token $token -Id $session.Id
+
+        Starts SSH session and retrieves password.
+
+    .LINK
+        Stop-NPSActivitySession
+        Get-NPSActivitySession
+        Get-NPSActivitySessionPassword
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $false)]
+        [System.Guid] $AccessPolicyId,
+
+        [Parameter(Mandatory)]
+        [System.String] $ActivityName,
+
+        [Parameter(Mandatory, ParameterSetName = "ResourceId")]
+        [System.Guid] $ResourceId,
+
+        [Parameter(Mandatory, ParameterSetName = "ResourceName")]
+        [System.String] $ResourceName,
+
+        [Parameter(Mandatory, ParameterSetName = "CredentialId")]
+        [System.Guid] $CredentialId,
+
+        [Parameter(Mandatory, ParameterSetName = "CredentialName")]
+        [System.String] $CredentialName,
+
+        [Parameter(Mandatory, ParameterSetName = "CredentialAccountResource")]
+        [System.String] $CredentialAccount,
+
+        [Parameter(Mandatory, ParameterSetName = "CredentialAccountResource")]
+        [System.String] $CredentialResource,
+
+        [Parameter(Mandatory = $false)]
+        [System.DateTime] $StartTime,
+
+        [Parameter(Mandatory = $false)]
+        [System.DateTime] $EndTime,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    # Convert times to UTC
+    if ($null -ne $StartTime -and $StartTime.Kind -ne "Utc") {
+        $StartTime = $StartTime.ToUniversalTime()
+    }
+    $StartTimeUtc = if ($null -ne $StartTime) { 
+        $StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ") 
+    } else { 
+        (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") 
+    }
+
+    if ($null -ne $EndTime -and $EndTime.Kind -ne "Utc") {
+        $EndTime = $EndTime.ToUniversalTime()
+    }
+    $EndTimeUtc = if ($null -ne $EndTime) { $EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ") } else { $null }
+
+    # Get managed account ID from token
+    $TokenObj = Convert-NPSToken -Token $Token -ErrorAction Stop
+    if ($null -eq $TokenObj -or $null -eq $TokenObj.ManagedAccountId) {
+        throw "Token is missing ManagedAccountId"
+    }
+    $ManagedAccountId = $TokenObj.ManagedAccountId
+
+    # Build request
+    $request = @{
+        activityName     = $ActivityName
+        managedAccountId = $ManagedAccountId
+        startDateTimeUtc = $StartTimeUtc
+        endDateTimeUtc   = $EndTimeUtc
+        accessPolicyId   = $AccessPolicyId
+    }
+
+    if ($null -ne $CredentialId) { $request.credentialId = $CredentialId }
+    if ($null -ne $ResourceId) { $request.managedResourceId = $ResourceId }
+    if ($null -ne $ResourceName) { $request.managedResourceName = $ResourceName }
+    if ($null -ne $CredentialName) { $request.credentialName = $CredentialName }
+    if ($null -ne $CredentialAccount) {
+        $request.credentialUserName = $CredentialAccount
+        $request.credentialDomain = $CredentialResource
+    }
+
+    $bodyJson = ConvertTo-Json $request
+    Write-Verbose $bodyJson
+
+    $Params = @{
+        Token  = $Token
+        Body   = $bodyJson
+        Method = "Post"
+        Uri    = "$($Uri)/api/v1/ActivitySession"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
+
+function Stop-NPSActivitySession {
+    <#
+    .SYNOPSIS
+        Stops an active activity session.
+
+    .DESCRIPTION
+        Terminates an activity session and releases the associated
+        credential. The session must be in an active state.
+
+    .PARAMETER Token
+        JWT authentication token.
+
+    .PARAMETER Id
+        Activity session GUID to stop.
+
+    .PARAMETER Uri
+        NPS server URL.
+
+    .PARAMETER SkipCertificateCheck
+        Skip SSL certificate validation.
+
+    .OUTPUTS
+        PSCustomObject
+        Result of the stop operation.
+
+    .EXAMPLE
+        Stop-NPSActivitySession -Token $token -Id $sessionId
+
+        Stops the specified session.
+
+    .EXAMPLE
+        Get-NPSActivitySession -Token $token -Status "Active" | ForEach-Object {
+            Stop-NPSActivitySession -Token $token -Id $_.Id
+        }
+
+        Stops all active sessions.
+
+    .LINK
+        Start-NPSActivitySession
+        Get-NPSActivitySession
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String] $Token,
+
+        [Parameter(Mandatory = $true)]
+        [System.Guid] $Id,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Uri = "https://localhost:6500",
+
+        [Parameter(Mandatory = $false)]
+        [switch] $SkipCertificateCheck
+    )
+
+    $Params = @{
+        Token  = $Token
+        Method = "Delete"
+        Uri    = "$($Uri)/api/v1/ActivitySession/$($Id)"
+    }
+    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck.IsPresent
+}
