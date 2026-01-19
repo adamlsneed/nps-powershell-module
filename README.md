@@ -3,32 +3,28 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Comprehensive PowerShell modules and documentation for automating Netwrix Privilege Secure (formerly Stealthbits PAM) API operations.
+PowerShell modules for automating Netwrix Privilege Secure (formerly Stealthbits PAM) operations.
 
-## 📁 Repository Structure
+## 📁 Modules Included
 
-```
-├── modules/
-│   ├── NPS-Module-Complete.psm1    # Full NPS module (34 cmdlets)
-│   └── SbPAMAPI-Enhanced.psm1      # Enhanced Stealthbits module (39 functions)
-├── docs/
-│   ├── NPS_MASTER_DOCUMENTATION.md # Complete API documentation
-│   ├── NPS_API_Complete_Reference.md
-│   ├── NPS_MODULE_TEST_REPORT.md
-│   └── SbPAM-QuickReference.md
-└── README.md
-```
+| Module | Size | Functions | Description |
+|--------|------|-----------|-------------|
+| `NPS-Module-Complete.psm1` | 58 KB | 34 cmdlets | Custom NPS module with full Get-Help documentation |
+| `SbPAMAPI-Enhanced.psm1` | 77 KB | 39 functions | Enhanced Stealthbits PAM module |
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```powershell
+# Clone the repository
+git clone https://github.com/adamlsneed/nps-powershell-module.git
+
 # Import the module
-Import-Module ./modules/NPS-Module-Complete.psm1
+Import-Module ./NPS-Module-Complete.psm1
 
 # Or for the enhanced Stealthbits module
-Import-Module ./modules/SbPAMAPI-Enhanced.psm1
+Import-Module ./SbPAMAPI-Enhanced.psm1
 ```
 
 ### Authentication
@@ -66,17 +62,51 @@ Get-NPSVersion
 
 ## 📚 Available Cmdlets (NPS-Module-Complete)
 
-| Category | Cmdlets |
-|----------|--------|
-| **Authentication** | `Connect-NPSServer`, `Disconnect-NPSServer`, `Test-NPSConnection` |
-| **Resources** | `Get-NPSManagedResource`, `Search-NPSManagedResource` |
-| **Credentials** | `Get-NPSCredential`, `Search-NPSCredential`, `Get-NPSCredentialCount` |
-| **Activities** | `Get-NPSActivity`, `Search-NPSActivity`, `Get-NPSActivitySession` |
-| **Policies** | `Get-NPSAccessControlPolicy`, `Search-NPSAccessControlPolicy` |
-| **Actions** | `Get-NPSActionGroup`, `Get-NPSActionJob`, `Get-NPSActionQueue` |
-| **Scanning** | `Get-NPSHostScanJob`, `Search-NPSHostScanJob` |
-| **System** | `Get-NPSHealth`, `Get-NPSVersion`, `Get-NPSPlatform`, `Get-NPSLicenseInfo` |
-| **Utilities** | `Invoke-NPSApi`, `Export-NPSManagedResources`, `Watch-NPSActionQueue` |
+### Authentication
+| Cmdlet | Description |
+|--------|-------------|
+| `Connect-NPSServer` | Authenticate to NPS with MFA |
+| `Disconnect-NPSServer` | End current session |
+| `Test-NPSConnection` | Verify connection status |
+
+### Resources & Credentials
+| Cmdlet | Description |
+|--------|-------------|
+| `Get-NPSManagedResource` | List managed resources |
+| `Search-NPSManagedResource` | Search resources with filters |
+| `Get-NPSCredential` | List stored credentials |
+| `Search-NPSCredential` | Search credentials |
+| `Get-NPSCredentialCount` | Get credential count |
+
+### Activities & Sessions
+| Cmdlet | Description |
+|--------|-------------|
+| `Get-NPSActivity` | List activities |
+| `Search-NPSActivity` | Search activities |
+| `Get-NPSActivitySession` | List activity sessions |
+| `Search-NPSActivitySession` | Search sessions |
+| `Get-NPSSessionLog` | Get session logs |
+
+### Policies & Actions
+| Cmdlet | Description |
+|--------|-------------|
+| `Get-NPSAccessControlPolicy` | List access policies |
+| `Search-NPSAccessControlPolicy` | Search policies |
+| `Get-NPSActionGroup` | List action groups |
+| `Get-NPSActionJob` | List action jobs |
+| `Get-NPSActionQueue` | List queued actions |
+| `Watch-NPSActionQueue` | Monitor action queue |
+
+### System & Utilities
+| Cmdlet | Description |
+|--------|-------------|
+| `Get-NPSHealth` | Check system health |
+| `Get-NPSVersion` | Get NPS version |
+| `Get-NPSPlatform` | List platforms |
+| `Get-NPSLicenseInfo` | Get license info |
+| `Invoke-NPSApi` | Low-level API wrapper |
+| `Export-NPSManagedResources` | Export resources to CSV |
+| `Test-NPSServices` | Test all services |
 
 ## 🔐 Authentication Flow
 
@@ -90,26 +120,21 @@ NPS uses a two-step MFA authentication:
 Connect-NPSServer -Server $server -Username $user -Password $pass -MfaCode $mfa
 ```
 
-## 📖 Documentation
+## 📖 Getting Help
 
-- [Master Documentation](docs/NPS_MASTER_DOCUMENTATION.md) - Complete API reference with 55+ endpoints
-- [API Reference](docs/NPS_API_Complete_Reference.md) - Detailed endpoint documentation
-- [Test Report](docs/NPS_MODULE_TEST_REPORT.md) - Module testing results
-- [Quick Reference](docs/SbPAM-QuickReference.md) - Function quick reference
+```powershell
+# Get help for any cmdlet
+Get-Help Connect-NPSServer -Full
+Get-Help Get-NPSManagedResource -Examples
+Get-Help Get-NPSCredential -Parameter *
 
-## 🔧 API Endpoints Discovered
+# List all available cmdlets
+Get-Command -Module NPS-Module-Complete
+```
 
-| Category | Endpoints | Records Found |
-|----------|-----------|---------------|
-| ManagedResource | 3 | 1,200+ |
-| Credential | 3 | 661 |
-| Activity | 2 | 100+ |
-| ActivitySession | 3 | 50+ |
-| AccessControlPolicy | 2 | 10+ |
-| ActionJob | 2 | 6,500+ |
-| HostScanJob | 2 | 110+ |
-| Platform | 1 | 15 |
-| System (Health/Version) | 3 | - |
+## 🔗 Related Projects
+
+- [NPS API Documentation](https://github.com/adamlsneed/nps-api-documentation) - Complete API reference with 55+ endpoints
 
 ## 📋 Requirements
 
