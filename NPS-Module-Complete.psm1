@@ -1817,41 +1817,88 @@ function Get-NPSWebsite {
 function Get-NPSLog {
     <#
     .SYNOPSIS
-        Gets log entries from NPS.
+        Gets log files and log content from NPS.
 
     .DESCRIPTION
-        Retrieves system log entries for auditing and
-        troubleshooting purposes.
+        Retrieves system log files for auditing and troubleshooting.
+        Without parameters, lists all available log files.
+        With -Name parameter, retrieves the content of a specific log file.
 
-    .PARAMETER Search
-        Use the Search endpoint for paginated results.
+    .PARAMETER Name
+        The name of a specific log file to retrieve content from.
+        Use Get-NPSLog without parameters to see available log files.
+
+    .PARAMETER Take
+        Number of log lines to retrieve. Default is 100.
+        Required when using -Name to get log content.
+
+    .PARAMETER Skip
+        Number of log lines to skip (for pagination). Default is 0.
 
     .OUTPUTS
         PSCustomObject[]
-        Log entry object(s).
+        Without -Name: Array of log file objects (id, name, length, lastWriteTime).
+        With -Name: Object containing totalCount and lines array.
 
     .EXAMPLE
         Get-NPSLog
 
-        Lists log entries.
+        Lists all available log files with their sizes and dates.
 
     .EXAMPLE
-        Get-NPSLog -Search
+        Get-NPSLog -Name "PAM-Proxy20260120.log" -Take 50
 
-        Searches logs with pagination.
+        Gets the first 50 lines from the specified log file.
+
+    .EXAMPLE
+        Get-NPSLog -Name "PAM-Proxy20260120.log" -Skip 100 -Take 50
+
+        Gets 50 lines starting from line 100 (pagination).
+
+    .EXAMPLE
+        Get-NPSLog | Where-Object { $_.length -gt 0 } | Select-Object name, length
+
+        Lists log files that have content.
+
+    .EXAMPLE
+        $logs = Get-NPSLog -Name "PAM-ActionService20260119.log" -Take 1000
+        $logs.lines | Where-Object { $_.statusString -eq "Error" }
+
+        Gets log lines and filters for errors.
+
+    .NOTES
+        Log files are named with pattern: PAM-{ServiceName}{Date}.log
+        Common services: Proxy, ActionService, EmailService, HostScanService
+
+        The /api/v1/Log/Search endpoint does not work (returns 500 error).
+        Use PowerShell filtering on the results instead.
 
     .LINK
         Get-NPSActivitySession
     #>
     [CmdletBinding()]
     param(
+        [Parameter(Position = 0)]
+        [string]$Name,
+
         [Parameter()]
-        [switch]$Search
+        [int]$Take = 100,
+
+        [Parameter()]
+        [int]$Skip = 0
     )
 
-    if ($Search) {
-        Invoke-NPSApi -Endpoint "/api/v1/Log/Search"
+    if ($Name) {
+        # Get content of specific log file
+        $endpoint = "/api/v1/Log/$Name"
+        if ($Skip -gt 0) {
+            $endpoint += "?skip=$Skip&take=$Take"
+        } else {
+            $endpoint += "?take=$Take"
+        }
+        Invoke-NPSApi -Endpoint $endpoint
     } else {
+        # List all log files
         Invoke-NPSApi -Endpoint "/api/v1/Log"
     }
 }
