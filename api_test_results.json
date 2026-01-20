@@ -1,0 +1,266 @@
+[
+  {
+    "endpoint": "/api/v1/Health",
+    "GET": 200,
+    "POST": 200,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Version",
+    "GET": 200,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/LicenseInfo",
+    "GET": 200,
+    "POST": 400,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/ManagedResource",
+    "GET": 200,
+    "POST": 200,
+    "records": 57
+  },
+  {
+    "endpoint": "/api/v1/ManagedResource/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 58
+  },
+  {
+    "endpoint": "/api/v1/Credential",
+    "GET": 200,
+    "POST": 400,
+    "records": 6
+  },
+  {
+    "endpoint": "/api/v1/Credential/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 10
+  },
+  {
+    "endpoint": "/api/v1/Credential/Count",
+    "GET": 200,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Activity",
+    "GET": 200,
+    "POST": 500,
+    "records": 14
+  },
+  {
+    "endpoint": "/api/v1/Activity/Search",
+    "GET": 404,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/ActivitySession",
+    "GET": 200,
+    "POST": 400,
+    "records": 219
+  },
+  {
+    "endpoint": "/api/v1/ActivitySession/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 10
+  },
+  {
+    "endpoint": "/api/v1/AccessControlPolicy",
+    "GET": 200,
+    "POST": 400,
+    "records": 8
+  },
+  {
+    "endpoint": "/api/v1/AccessControlPolicy/Search",
+    "GET": 404,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Host",
+    "GET": 405,
+    "POST": 200,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/HostScanJob",
+    "GET": 200,
+    "POST": 400,
+    "records": 2134
+  },
+  {
+    "endpoint": "/api/v1/HostScanJob/Search",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/HostScanJob/Host",
+    "GET": 200,
+    "POST": 405,
+    "records": 39
+  },
+  {
+    "endpoint": "/api/v1/HostScanJob/User",
+    "GET": 200,
+    "POST": 405,
+    "records": 71
+  },
+  {
+    "endpoint": "/api/v1/ActionGroup",
+    "GET": 200,
+    "POST": 201,
+    "records": 92
+  },
+  {
+    "endpoint": "/api/v1/ActionGroup/Search",
+    "GET": 400,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/ActionJob",
+    "GET": 200,
+    "POST": 405,
+    "records": 1880
+  },
+  {
+    "endpoint": "/api/v1/ActionJob/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 25
+  },
+  {
+    "endpoint": "/api/v1/ActionQueue",
+    "GET": 200,
+    "POST": 400,
+    "records": 4483
+  },
+  {
+    "endpoint": "/api/v1/ActionQueue/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 100
+  },
+  {
+    "endpoint": "/api/v1/ActionTemplate",
+    "GET": 200,
+    "POST": 405,
+    "records": 71
+  },
+  {
+    "endpoint": "/api/v1/ActionService",
+    "GET": 200,
+    "POST": 500,
+    "records": 3
+  },
+  {
+    "endpoint": "/api/v1/Platform",
+    "GET": 200,
+    "POST": 400,
+    "records": 14
+  },
+  {
+    "endpoint": "/api/v1/Platform/Search",
+    "GET": 400,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/User",
+    "GET": 405,
+    "POST": 200,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/User/Search",
+    "GET": 400,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/User/Me",
+    "GET": 400,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/NpsUser",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/NpsUser/Search",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/ManagedAccount",
+    "GET": 400,
+    "POST": 400,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/ManagedAccount/Search",
+    "GET": 200,
+    "POST": 405,
+    "records": 6
+  },
+  {
+    "endpoint": "/api/v1/Log",
+    "GET": 200,
+    "POST": 405,
+    "records": 151
+  },
+  {
+    "endpoint": "/api/v1/Group",
+    "GET": 405,
+    "POST": 500,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Group/Search",
+    "GET": 400,
+    "POST": 405,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Registration",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Configuration",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Session",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Audit",
+    "GET": 404,
+    "POST": 404,
+    "records": null
+  },
+  {
+    "endpoint": "/api/v1/Report",
+    "GET": 405,
+    "POST": 400,
+    "records": null
+  }
+]

@@ -936,6 +936,52 @@ function Get-NPSActivityGroup {
     }
 }
 
+function Get-NPSConnectionProfile {
+    <#
+    .SYNOPSIS
+        Retrieves connection profiles from NPS.
+
+    .DESCRIPTION
+        Gets connection profile definitions from Netwrix Privilege Secure.
+        Connection profiles define how NPS connects to managed resources,
+        including connection methods, ports, and authentication settings.
+
+    .PARAMETER Id
+        The unique identifier (GUID) of a specific connection profile.
+
+    .OUTPUTS
+        PSCustomObject or PSCustomObject[]
+        Connection profile object(s).
+
+    .EXAMPLE
+        Get-NPSConnectionProfile
+
+        Lists all connection profiles.
+
+    .EXAMPLE
+        Get-NPSConnectionProfile -Id "12345678-1234-1234-1234-123456789abc"
+
+        Gets a specific connection profile by ID.
+
+    .LINK
+        Get-NPSManagedResource
+        Get-NPSPlatform
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0)]
+        [ValidatePattern("^[0-9a-fA-F-]{36}$")]
+        [string]$Id
+    )
+
+    if ($Id) {
+        Invoke-NPSApi -Endpoint "/api/v1/ConnectionProfile/$Id"
+    } else {
+        Invoke-NPSApi -Endpoint "/api/v1/ConnectionProfile"
+    }
+}
+
+
 # ============================================================================
 # ACCESS CONTROL POLICY CMDLETS
 # ============================================================================
@@ -955,9 +1001,6 @@ function Get-NPSAccessControlPolicy {
 
     .PARAMETER Id
         The unique identifier (GUID) of a specific policy to retrieve.
-
-    .PARAMETER Search
-        Use the Search endpoint for paginated results.
 
     .OUTPUTS
         PSCustomObject or PSCustomObject[]
@@ -995,6 +1038,10 @@ function Get-NPSAccessControlPolicy {
 
         Lists policies sorted by priority.
 
+    .NOTES
+        The /api/v1/AccessControlPolicy/Search endpoint does not exist.
+        Use PowerShell filtering on the list results instead.
+
     .LINK
         Get-NPSManagedResource
         Get-NPSCredential
@@ -1004,22 +1051,13 @@ function Get-NPSAccessControlPolicy {
     param(
         [Parameter(ParameterSetName = "ById", Mandatory = $true, Position = 0)]
         [ValidatePattern("^[0-9a-fA-F-]{36}$")]
-        [string]$Id,
-
-        [Parameter(ParameterSetName = "Search")]
-        [switch]$Search
+        [string]$Id
     )
 
-    switch ($PSCmdlet.ParameterSetName) {
-        "ById" {
-            Invoke-NPSApi -Endpoint "/api/v1/AccessControlPolicy/$Id"
-        }
-        "Search" {
-            Invoke-NPSApi -Endpoint "/api/v1/AccessControlPolicy/Search"
-        }
-        default {
-            Invoke-NPSApi -Endpoint "/api/v1/AccessControlPolicy"
-        }
+    if ($Id) {
+        Invoke-NPSApi -Endpoint "/api/v1/AccessControlPolicy/$Id"
+    } else {
+        Invoke-NPSApi -Endpoint "/api/v1/AccessControlPolicy"
     }
 }
 
@@ -1317,11 +1355,11 @@ function Get-NPSHostScanJob {
         Gets host scan job records. Host scan jobs discover
         accounts, services, and other resources on managed hosts.
 
-    .PARAMETER Search
-        Use the Search endpoint for paginated results.
-
     .PARAMETER Type
         Filter by scan type: Host or User.
+        - Host: Returns host-type scan jobs
+        - User: Returns user-type scan jobs
+        If not specified, returns all scan jobs.
 
     .OUTPUTS
         PSCustomObject or PSCustomObject[]
@@ -1330,22 +1368,26 @@ function Get-NPSHostScanJob {
     .EXAMPLE
         Get-NPSHostScanJob
 
-        Lists host scan jobs.
-
-    .EXAMPLE
-        Get-NPSHostScanJob -Search
-
-        Searches host scan jobs with pagination.
+        Lists all host scan jobs.
 
     .EXAMPLE
         Get-NPSHostScanJob -Type Host
 
-        Gets host-type scan jobs.
+        Gets host-type scan jobs only.
 
     .EXAMPLE
         Get-NPSHostScanJob -Type User
 
-        Gets user-type scan jobs.
+        Gets user-type scan jobs only.
+
+    .EXAMPLE
+        Get-NPSHostScanJob | Where-Object { $_.status -eq "Completed" }
+
+        Gets completed scan jobs using PowerShell filtering.
+
+    .NOTES
+        The /api/v1/HostScanJob/Search endpoint does not exist.
+        Use PowerShell filtering on the list results instead.
 
     .LINK
         Get-NPSManagedResource
@@ -1353,29 +1395,18 @@ function Get-NPSHostScanJob {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [switch]$Search,
-
-        [Parameter()]
         [ValidateSet("Host", "User")]
         [string]$Type
     )
 
-    if ($Type -eq "Host") {
-        if ($Search) {
-            Invoke-NPSApi -Endpoint "/api/v1/HostScanJob/Host/Search"
-        } else {
+    switch ($Type) {
+        "Host" {
             Invoke-NPSApi -Endpoint "/api/v1/HostScanJob/Host"
         }
-    } elseif ($Type -eq "User") {
-        if ($Search) {
-            Invoke-NPSApi -Endpoint "/api/v1/HostScanJob/User/Search"
-        } else {
+        "User" {
             Invoke-NPSApi -Endpoint "/api/v1/HostScanJob/User"
         }
-    } else {
-        if ($Search) {
-            Invoke-NPSApi -Endpoint "/api/v1/HostScanJob/Search"
-        } else {
+        default {
             Invoke-NPSApi -Endpoint "/api/v1/HostScanJob"
         }
     }
@@ -1831,35 +1862,45 @@ function Get-NPSUser {
         Gets user information from NPS.
 
     .DESCRIPTION
-        Retrieves user account information. Note: This endpoint
-        may require POST method and returns the current user's
-        information or user template schema.
+        Retrieves user account information. The list endpoint requires
+        POST method with a body. Individual users can be retrieved by ID.
+
+    .PARAMETER Id
+        Optional. Get a specific user by ID.
 
     .OUTPUTS
-        PSCustomObject
-        User object with 38+ fields including id, displayName,
+        PSCustomObject or PSCustomObject[]
+        User object(s) with 38+ fields including id, displayName,
         samaccountname, userPrincipalName, email, department, etc.
 
     .EXAMPLE
         Get-NPSUser
 
-        Gets current user information.
+        Lists all users.
+
+    .EXAMPLE
+        Get-NPSUser -Id "abc-123-def"
+
+        Gets a specific user by ID.
 
     .NOTES
-        Some user endpoints require POST method.
+        The /api/v1/User endpoint requires POST with a body for listing.
 
     .LINK
         Get-NPSManagedAccount
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter()]
+        [string]$Id
+    )
 
-    try {
-        Invoke-NPSApi -Endpoint "/api/v1/User" -Method POST
-    }
-    catch {
-        # Fallback to GET if POST fails
-        Invoke-NPSApi -Endpoint "/api/v1/User" -Method GET
+    if ($Id) {
+        Invoke-NPSApi -Endpoint "/api/v1/User/$Id" -Method GET
+    } else {
+        # User endpoint requires POST with body
+        $body = @{}
+        Invoke-NPSApi -Endpoint "/api/v1/User" -Method POST -Body $body
     }
 }
 
@@ -3165,21 +3206,35 @@ function Get-NPSSettings {
     <#
     .SYNOPSIS
         Gets NPS system settings.
+
     .DESCRIPTION
         Retrieves system configuration settings.
-    .PARAMETER Token
-        JWT authentication token.
+
+        WARNING: The /api/v1/Settings endpoint does not exist in NPS v25.12.
+        This function is kept for forward compatibility but will return 404.
+
+    .OUTPUTS
+        PSCustomObject
+        Settings object (if endpoint becomes available).
+
     .EXAMPLE
-        Get-NPSSettings -Token $token
+        Get-NPSSettings
+
+        Attempts to get system settings.
+
+    .NOTES
+        This endpoint returns 404 in NPS v25.12.00000.
+        The endpoint may be available in future versions.
+
+    .LINK
+        Get-NPSHealth
+        Get-NPSVersion
     #>
     [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)][string] $Token,
-        [Parameter(Mandatory = $false)][string] $Uri = "https://localhost:6500",
-        [Parameter(Mandatory = $false)][switch] $SkipCertificateCheck
-    )
-    $Params = @{ Token = $Token; Uri = "$($Uri.TrimEnd("/"))/api/v1/Settings" }
-    return Invoke-NPSRest @Params -SkipCertificateCheck:$SkipCertificateCheck
+    param()
+
+    Write-Warning "The /api/v1/Settings endpoint may not exist in your NPS version."
+    Invoke-NPSApi -Endpoint "/api/v1/Settings"
 }
 
 function Get-NPSSshCertificateByDomainUser {
