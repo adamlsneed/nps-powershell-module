@@ -1869,9 +1869,12 @@ function Get-NPSHost {
         Gets host information from NPS.
 
     .DESCRIPTION
-        Retrieves host/server information. Note: This endpoint
-        may require POST method and returns host template schema
+        Retrieves host/server information. This endpoint uses POST
+        method with a search body and returns host template schema
         with 34+ fields.
+
+    .PARAMETER Id
+        Optional. Get a specific host by ID.
 
     .OUTPUTS
         PSCustomObject
@@ -1881,23 +1884,32 @@ function Get-NPSHost {
     .EXAMPLE
         Get-NPSHost
 
-        Gets host information/schema.
+        Gets all hosts via search.
+
+    .EXAMPLE
+        Get-NPSHost -Id "abc-123"
+
+        Gets a specific host by ID.
 
     .NOTES
-        Some host endpoints require POST method.
+        The Host endpoint requires POST method with a body.
 
     .LINK
         Get-NPSManagedResource
         Get-NPSHostScanJob
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter()]
+        [string]$Id
+    )
 
-    try {
-        Invoke-NPSApi -Endpoint "/api/v1/Host" -Method POST
-    }
-    catch {
-        Invoke-NPSApi -Endpoint "/api/v1/Host" -Method GET
+    if ($Id) {
+        Invoke-NPSApi -Endpoint "/api/v1/Host/$Id" -Method GET
+    } else {
+        # Host endpoint requires POST with body for search
+        $body = @{}
+        Invoke-NPSApi -Endpoint "/api/v1/Host" -Method POST -Body $body
     }
 }
 
