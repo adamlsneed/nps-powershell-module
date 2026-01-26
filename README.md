@@ -174,37 +174,53 @@ Get-NPSVersion
 
 ---
 
-## 📖 Getting Help
+## 🛠️ Helper Scripts
+
+The `/scripts` directory contains powerful utilities to enhance your NPS workflows:
+
+| Script | Description | Key Features |
+|--------|-------------|--------------|
+| **Test-NPSModule.ps1** | Comprehensive test suite | • Tests all 66 cmdlets<br>• Performance metrics<br>• Export results to JSON |
+| **Get-NPSSessionReport.ps1** | Session reporting | • Active/Historical reports<br>• User activity analysis<br>• Export to CSV/JSON/HTML |
+| **Start-NPSSessionManager.ps1** | Interactive session manager | • Menu-driven interface<br>• Start/stop sessions<br>• Password retrieval |
+| **Get-NPSAuditReport.ps1** | Compliance & audit reports | • Access reviews<br>• Policy compliance<br>• Security events |
+| **Export-NPSInventory.ps1** | Resource inventory export | • CSV export<br>• All resource details |
+| **NPS-HealthToolkit.ps1** | Health monitoring | • System overview<br>• Quick diagnostics |
+
+### Quick Start Examples
 
 ```powershell
-# Get help for any cmdlet
+# Run comprehensive tests
+.\scripts\Test-NPSModule.ps1 -Detailed
+
+# Generate session report
+.\scripts\Get-NPSSessionReport.ps1 -ReportType Summary
+
+# Launch interactive manager
+.\scripts\Start-NPSSessionManager.ps1
+
+# Compliance audit
+.\scripts\Get-NPSAuditReport.ps1 -ReportType AccessReview -Days 90
+```
+
+See **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** for detailed examples and troubleshooting.
+
+---
+
+## 📖 Documentation
+
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Complete command reference and examples
+- **[NPS_API_VERIFIED_REFERENCE.md](NPS_API_VERIFIED_REFERENCE.md)** - API endpoint documentation
+- **Get-Help** - Built-in help for all cmdlets
+
+```powershell
+# View cmdlet help
 Get-Help Connect-NPSServer -Full
 Get-Help Get-NPSManagedResource -Examples
-Get-Help Start-NPSActivitySession -Parameter *
 
 # List all available cmdlets
 Get-Command -Module NPS-Module-Complete
 ```
-
----
-
-## 🔐 Authentication Flow
-
-NPS uses a two-step MFA authentication:
-
-1. **POST /signinBody** - Initial auth with `Login` and `Password` → Returns pre-MFA token
-2. **POST /signin2fa** - MFA verification with code → Returns full JWT token
-
-```powershell
-# The Connect-NPSServer cmdlet handles this automatically
-Connect-NPSServer -Server $server -Username $user -Password $pass -MfaCode $mfa
-```
-
----
-
-## 🔗 Related Projects
-
-- [NPS API Documentation](https://github.com/adamlsneed/nps-api-documentation) - Complete API reference with 55+ endpoints
 
 ---
 

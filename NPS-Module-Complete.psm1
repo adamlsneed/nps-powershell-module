@@ -2264,19 +2264,40 @@ Export-ModuleMember -Function @(
     "Connect-NPSServer"
     "Disconnect-NPSServer"
     "Test-NPSConnection"
+    "Convert-NPSToken"
+    "Get-NPSToken"
+    "Get-NPSMfaToken"
+    "Get-NPSUserToken"
+    "Get-NPSAppUserToken"
 
     # Core API
     "Invoke-NPSApi"
 
     # Managed Resources
     "Get-NPSManagedResource"
+    "Get-NPSManagedResourceSshFingerprint"
+    "Set-NPSManagedResourceTrustThumbprint"
 
     # Credentials
     "Get-NPSCredential"
+    "Get-NPSCredentialTypes"
+    "Get-NPSCredentialSshCertificate"
+    "Get-NPSAuthenticationMethodTypes"
+    "Get-NPSCiscoEnablePassword"
+    "Get-NPSCiscoEnablePasswordByCredential"
 
     # Activity Sessions
     "Get-NPSActivitySession"
     "Get-NPSActivitySessionLog"
+    "Get-NPSActivitySessionPassword"
+    "Get-NPSActivitySessionResource"
+    "Get-NPSActivitySessionConfiguration"
+    "Get-NPSActivitySessionCount"
+    "Get-NPSActivitySessionSummary"
+    "Start-NPSActivitySession"
+    "Stop-NPSActivitySession"
+    "Search-NPSActiveSession"
+    "Search-NPSHistoricalSession"
 
     # Activities
     "Get-NPSActivity"
@@ -2284,6 +2305,7 @@ Export-ModuleMember -Function @(
 
     # Access Control
     "Get-NPSAccessControlPolicy"
+    "Get-NPSUserPolicy"
 
     # Managed Accounts
     "Get-NPSManagedAccount"
@@ -2293,9 +2315,11 @@ Export-ModuleMember -Function @(
     "Get-NPSActionJob"
     "Get-NPSActionGroup"
     "Get-NPSActionTemplate"
+    "Get-NPSActionService"
 
     # Host Scanning
     "Get-NPSHostScanJob"
+    "Get-NPSHost"
 
     # Platforms
     "Get-NPSPlatform"
@@ -2309,20 +2333,33 @@ Export-ModuleMember -Function @(
     "Get-NPSHealth"
     "Get-NPSVersion"
     "Get-NPSLicenseInfo"
-    "Get-NPSActionService"
+    "Get-NPSSettings"
     "Get-NPSServiceRegistration"
+
+    # SSH & Certificates
+    "Get-NPSCertificate"
+    "Get-NPSNixCertificate"
+    "Get-NPSSSHKeyGenAlgorithm"
+    "Get-NPSSshCertificateByDomainUser"
+    "Get-NPSSshCertificateByUser"
+    "Get-NPSUserSshCertificate"
+    "New-NPSUserSshCertificate"
+
+    # Domain Management
+    "Get-NPSDomain"
 
     # Additional Resources
     "Get-NPSSecretVault"
     "Get-NPSWebsite"
     "Get-NPSLog"
     "Get-NPSUser"
-    "Get-NPSHost"
+    "Get-NPSTotp"
 
     # Utilities
     "Export-NPSManagedResources"
     "Test-NPSServices"
     "Watch-NPSActionQueue"
+    "Get-NPSFavoriteResource"
 )
 
 Write-Host @"
