@@ -174,7 +174,38 @@ Get-NPSVersion
 
 ---
 
-## 🛠️ Helper Scripts
+## 📊 PAM Reporting Suite
+
+**Enterprise-grade reports for privileged access management**, designed for security teams, compliance officers, and IT operations.
+
+### Core PAM Reports
+
+| Report | Purpose | Key Features |
+|--------|---------|--------------|
+| **Get-NPSCredentialRotationReport.ps1** | Password rotation compliance | • Rotation status tracking<br>• Dormant credential detection<br>• Compliance rate calculation |
+| **Get-NPSServiceAccountDependencyMap.ps1** | Service account impact analysis | • System dependency mapping<br>• Change impact assessment<br>• Criticality scoring |
+| **Get-NPSPrivilegedUserActivityReport.ps1** | User behavior analysis | • After-hours detection<br>• Risk scoring<br>• Anomaly detection |
+| **Get-NPSPAMDashboard.ps1** | Executive overview dashboard | • Real-time metrics<br>• Compliance scoring<br>• Security alerts |
+
+### Quick Examples
+
+```powershell
+# Credential rotation compliance (90-day threshold)
+.\scripts\Get-NPSCredentialRotationReport.ps1 -ShowSummary
+
+# Service account dependency map with impact analysis
+.\scripts\Get-NPSServiceAccountDependencyMap.ps1 -ShowImpactAnalysis -ExportPath "./dependencies.html"
+
+# 90-day user activity analysis with behavioral detection
+.\scripts\Get-NPSPrivilegedUserActivityReport.ps1 -Days 90 -IncludeBehavioralAnalysis
+
+# Live executive dashboard (auto-refresh every 5 minutes)
+.\scripts\Get-NPSPAMDashboard.ps1 -ExportPath "./dashboard.html" -RefreshInterval 300
+```
+
+See **[PAM_REPORTING_GUIDE.md](PAM_REPORTING_GUIDE.md)** for comprehensive documentation, use cases, and compliance mappings (NIST, SOX, PCI-DSS, ISO 27001).
+
+---
 
 The `/scripts` directory contains powerful utilities to enhance your NPS workflows:
 
