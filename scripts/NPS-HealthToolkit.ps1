@@ -11,7 +11,7 @@
 #>
 
 param(
-    [string]$Server = "https://nps.adamsneed.com:6500",
+    [string]$Server = "https://nps.lab.example.com:6500",
     [string]$Username = "adamsneed\asneed",
     [SecureString]$Password,
     [string]$MfaCode = "123456"

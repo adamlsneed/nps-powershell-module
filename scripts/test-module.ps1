@@ -1,7 +1,7 @@
 # Test script for NPS PowerShell Module
 Import-Module ./NPS-Module-Complete.psm1 -Force
 
-$Server = "https://nps.adamsneed.com:6500"
+$Server = "https://nps.lab.example.com:6500"
 $User = "adamsneed\asneed"
 $Pass = "Temp123!"
 $Mfa = "123456"

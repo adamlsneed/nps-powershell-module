@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$Server = "https://nps.adamsneed.com:6500",
+    [string]$Server = "https://nps.lab.example.com:6500",
 
     [Parameter()]
     [string]$Username = "adamsneed\asneed",
